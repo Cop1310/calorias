@@ -356,8 +356,8 @@ function closeSheet(){ const o=document.getElementById("ov"); if(o) o.remove(); 
 
 /* ---------- añadir comida ---------- */
 let sheetState=null, _rq="";
-function openAdd(mealKey){ sheetState={mealKey,mode:"buscar",pending:null,text:"",photo:null,result:null,loading:false,err:""};
-  openSheet(""); renderAddSheet(); }
+function openAdd(mealKey){ openSheet("");
+  sheetState={mealKey,mode:"buscar",pending:null,text:"",photo:null,result:null,loading:false,err:""}; renderAddSheet(); }
 function renderAddSheet(){
   const s=sheetState; if(!s) return; const c=document.getElementById("sheetC"); if(!c) return;
   const modes=[["buscar","Buscar"],["manual","Manual"]]; if(DB.apiKey) modes.push(["ia","Describir · IA"]);
