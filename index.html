@@ -59,7 +59,7 @@
   .toast{position:fixed; bottom:96px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff;
     padding:8px 14px; border-radius:999px; font-size:13px; z-index:80; opacity:0; transition:opacity .2s}
   .toast.show{opacity:.95}
-  .foodrow{display:flex; justify-content:space-between; align-items:center; width:100%; padding:10px 12px;
+  .foodrow{display:flex; justify-content:space-between; align-items:flex-start; width:100%; padding:10px 12px;
     border:1px solid var(--line); border-radius:12px; background:var(--card); margin-bottom:6px; cursor:pointer; font-size:14px}
   .chips{display:flex; gap:6px; overflow-x:auto; padding:10px 0}
   .chip{white-space:nowrap; padding:6px 11px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--sub); font-size:12px; cursor:pointer; flex:none}
@@ -392,7 +392,7 @@ function renderDiario(m){
     mondayBanner=`<div class="banner" style="background:#EEF;border:1px solid #CCD;color:var(--primary);margin-bottom:12px;cursor:pointer" onclick="tab='peso';render()">⚖️ <span>Es lunes: toca pesarse. Toca para registrar tu peso.</span></div>`;
   const meals = MEALS.map(([k,label])=>{
     const items=d[k].map((it,i)=>`<div class="item">
-        <div style="min-width:0;padding-right:8px"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.name)}</div>
+        <div style="min-width:0;padding-right:8px;flex:1"><div style="overflow-wrap:anywhere">${esc(it.name)}</div>
           ${it.cantidad?`<div class="xs muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.cantidad)}</div>`:""}</div>
         <div class="row" style="flex-shrink:0"><span class="bold tnum">${es(it.kcal)} kcal</span>
           <button class="ib" onclick="openEditFood('${k}',${i})">✏️</button><button class="ib" onclick="delFood('${k}',${i})">🗑️</button></div>
@@ -468,7 +468,7 @@ function renderAddSheet(){
   else { const ph=s.mealKey==="extra"?"Ej: 2 cañas de 33 cl y un tinto de verano":"Ej: ensalada de lechuga, tomate, cebolla, pavo y huevo cocido";
     let review=""; if(s.result){ review=`<div class="card" style="border-style:dashed;border-color:var(--primary);padding:12px;margin-top:12px">
         <div class="xs bold" style="color:var(--primary);margin-bottom:8px">Estimación — revisa y ajusta</div>
-        ${s.result.items.map((it,i)=>`<div class="row" style="margin-bottom:8px"><div style="flex:1;min-width:0"><div class="sm" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(it.nombre)}</div><div class="xs muted">${esc(it.cantidad)}</div></div>
+        ${s.result.items.map((it,i)=>`<div class="row" style="margin-bottom:8px"><div style="flex:1;min-width:0"><div class="sm" style="overflow-wrap:anywhere">${esc(it.nombre)}</div><div class="xs muted">${esc(it.cantidad)}</div></div>
           <input value="${it.kcal}" inputmode="numeric" style="width:74px;text-align:right" oninput="sheetState.result.items[${i}].kcal=Math.max(0,Math.round(Number(this.value)||0))"/><span class="xs muted">kcal</span>
           <button class="ib" onclick="sheetState.result.items.splice(${i},1);renderAddSheet()">✕</button></div>`).join("")}
         ${s.result.nota?`<div class="xs muted">${esc(s.result.nota)}</div>`:""}
@@ -492,7 +492,7 @@ function rowHTML(f,i){ const sel=sheetState.pendingKey===key(f);
   const left=f.img?`<img class="thumb" src="data:image/jpeg;base64,${f.img}"/>`:`<span style="width:24px;text-align:center;flex:none">${f.emoji||"•"}</span>`;
   let qbar=""; if(sel){ const ul=f.type==="u"?"uds":f.unit;
     qbar=`<div class="row" style="margin:6px 0 10px;gap:8px"><input id="qty" inputmode="decimal" value="${f.q}" style="width:90px"/><span class="xs muted">${ul}</span><span class="xs muted" id="qkcal"></span><button class="btn green" style="margin-left:auto" onclick="confirmFood()">Añadir</button></div>`; }
-  return `<div><div class="foodrow" onclick="pickFood(${i})"><span class="row" style="gap:8px;min-width:0">${left}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(f.name)}</span></span><span class="xs muted tnum" style="flex:none">${info}</span></div>${qbar}</div>`; }
+  return `<div><div class="foodrow" onclick="pickFood(${i})"><span class="row" style="gap:8px;min-width:0;flex:1;align-items:flex-start">${left}<span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)}</span></span><span class="xs muted tnum" style="flex:none;padding-left:8px">${info}</span></div>${qbar}</div>`; }
 function chipsHTML(){ const cats=["Todos"].concat(CATS.map(c=>c[0]));
   return cats.map(c=>`<button class="chip ${(sheetState.cat||"Todos")===c?"on":""}" onclick="selCat('${c}')">${c}</button>`).join(""); }
 function selCat(c){ sheetState.cat=c; sheetState.pending=null; sheetState.pendingKey=null;
@@ -740,7 +740,7 @@ function renderRepo(){ const hasAI=!!DB.apiKey, p=document.getElementById("repoP
       ${repoImg?`<div class="row xs muted" style="margin-top:8px"><img class="thumb" src="data:image/jpeg;base64,${repoImg}"/> foto lista <a onclick="repoImg=null;renderRepo()">quitar</a></div>`:""}
     </div>
     <div style="margin-top:12px">${(DB.foods||[]).map((f,i)=>`<div class="foodrow" style="cursor:default">
-      <span class="row" style="gap:8px;min-width:0">${f.img?`<img class="thumb" src="data:image/jpeg;base64,${f.img}"/>`:""}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(f.name)}</span></span>
+      <span class="row" style="gap:8px;min-width:0;flex:1;align-items:flex-start">${f.img?`<img class="thumb" src="data:image/jpeg;base64,${f.img}"/>`:""}<span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)}</span></span>
       <div class="row"><span class="xs muted tnum">${f.kcal} ${f.type==='u'?'kcal/ud':'kcal/100'+f.unit}</span><button class="ib" onclick="repoDel(${i})">🗑️</button></div></div>`).join("")||'<div class="xs muted">Aún no has guardado alimentos.</div>'}</div>`;
 }
 async function scanLabel(file){ if(!file) return; repoBusy=true; repoMsg=""; repoDraft=null; renderRepo();
