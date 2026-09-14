@@ -496,7 +496,13 @@ function renderAddSheet(){
   const s=sheetState; if(!s) return; const c=document.getElementById("sheetC"); if(!c) return;
   const modes=[["buscar","Buscar"],["manual","Manual"]]; if(DB.apiKey) modes.push(["ia","Describir · IA"]);
   let body="";
-  if(s.mode==="buscar"){ body=`<div class="row"><input id="fsearch" placeholder="Buscar alimento o plato…" autocomplete="off"/>${micBtn("fsearch",false)}</div><div id="fchips" class="chips"></div><div id="fresults" style="max-height:46vh;overflow-y:auto"></div>`; }
+  if(s.mode==="buscar"){ if(s.pending){ const f=s.pending; const ul=f.type==="u"?"uds":f.unit; const info=f.type==="u"?`${f.kcal} kcal/ud`:`${f.kcal} kcal/100${f.unit}`;
+      body=`<button class="btn" onclick="backToList()">‹ Volver a la lista</button>
+      <div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:4px">${f.emoji||"•"} ${esc(f.name)}</div><div class="xs muted">${info}</div>
+      <label class="field">Cantidad (${ul})</label>
+      <div class="row"><input id="qty" inputmode="decimal" value="${f.q}" style="width:120px"/>${micBtn("qty",true)}<span class="muted" id="qkcal" style="font-size:16px"></span></div>
+      <button class="btn green" style="width:100%;margin-top:16px;padding:13px" onclick="confirmFood()">Añadir a ${MEALS.find(x=>x[0]===s.mealKey)[1]}</button></div>`; }
+    else { body=`<div class="row"><input id="fsearch" placeholder="Buscar alimento o plato…" autocomplete="off"/>${micBtn("fsearch",false)}</div><div id="fchips" class="chips"></div><div id="fresults" style="max-height:52vh;overflow-y:auto"></div>`; } }
   else if(s.mode==="manual"){ body=`<div class="row"><input id="mname" placeholder="Nombre del alimento" autocomplete="off"/>${micBtn("mname",false)}</div>
       <div class="row" style="margin-top:8px"><input id="mkcal" inputmode="numeric" placeholder="kcal" style="width:120px"/>${micBtn("mkcal",true)}
       <label class="row xs" style="gap:6px;width:auto"><input type="checkbox" id="msave" style="width:auto"/> guardar en mis alimentos</label></div>
@@ -519,7 +525,8 @@ function renderAddSheet(){
       ${s.err?`<div class="xs" style="color:var(--over);margin-top:6px">${esc(s.err)}</div>`:""}${review}`; }
   c.innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="bold">${MEALS.find(x=>x[0]===s.mealKey)[1]}</span><button class="btn icon" onclick="closeSheet()">✕</button></div>
     <div class="seg" style="margin-bottom:12px">${modes.map(([v,l])=>`<button class="${s.mode===v?'on':''}" onclick="sheetState.mode='${v}';sheetState.result=null;renderAddSheet()">${l}</button>`).join("")}</div>${body}`;
-  if(s.mode==="buscar"){ const inp=document.getElementById("fsearch"); inp.oninput=()=>renderResults(); document.getElementById("fchips").innerHTML=chipsHTML(); renderResults(); inp.focus(); }
+  if(s.mode==="buscar"){ if(s.pending){ updQ(); const qi=document.getElementById("qty"); if(qi) qi.oninput=updQ; }
+    else { const inp=document.getElementById("fsearch"); inp.oninput=()=>renderResults(); document.getElementById("fchips").innerHTML=chipsHTML(); renderResults(); } }
   else if(s.mode==="ia"){ const ta=document.getElementById("iatext"); if(ta) ta.oninput=()=>{sheetState.text=ta.value;}; }
 }
 function key(f){ return f.name+"|"+f.kcal+"|"+f.unit; }
@@ -545,14 +552,15 @@ function renderResults(){ const box=document.getElementById("fresults"); if(!box
       html+=`<div class="cathead">${emoji} ${name}</div>`; L.forEach(f=>{ html+=rowHTML(f,flat.length); flat.push(f); }); }); }
   sheetState._list=flat; box.innerHTML=html||`<div class="xs muted" style="padding:8px">Sin resultados. Usa la pestaña Manual.</div>`;
   if(sheetState.pendingKey){ const qi=document.getElementById("qty"); if(qi){ qi.oninput=updQ; updQ(); qi.focus(); } } }
-function pickFood(i){ sheetState.pending=sheetState._list[i]; sheetState.pendingKey=key(sheetState.pending); renderResults(); }
+function pickFood(i){ sheetState.pending=sheetState._list[i]; sheetState.pendingKey=key(sheetState.pending); if(document.activeElement&&document.activeElement.blur) document.activeElement.blur(); renderAddSheet(); }
+function backToList(){ sheetState.pending=null; sheetState.pendingKey=null; renderAddSheet(); }
 function kcalOf(f,qty){ return f.type==="u"?Math.round(f.kcal*qty):Math.round(f.kcal*qty/100); }
 function updQ(){ const f=sheetState.pending,qi=document.getElementById("qty"),o=document.getElementById("qkcal");
   if(f&&qi&&o) o.textContent="= "+es(kcalOf(f,parseFloat(qi.value)||0))+" kcal"; }
 function confirmFood(){ const f=sheetState.pending,qi=document.getElementById("qty"),qty=parseFloat(qi.value)||0; if(!f||qty<=0) return;
   const cant=f.type==="u"?`${es(qty)} ud`:`${es(qty)} ${f.unit}`;
   dayOf(curISO)[sheetState.mealKey].push({name:f.name,cantidad:cant,kcal:kcalOf(f,qty),base:{type:f.type,kcal:f.kcal,unit:f.unit},qty:qty});
-  save(); sheetState.pending=null; sheetState.pendingKey=null; toast("Añadido"); render(); renderResults(); }
+  save(); sheetState.pending=null; sheetState.pendingKey=null; toast("Añadido"); render(); renderAddSheet(); }
 function addManual(){ const n=document.getElementById("mname").value.trim(),k=Math.round(parseFloat(document.getElementById("mkcal").value)||0); if(!n||!(k>=0)) return;
   if(document.getElementById("msave").checked && !DB.foods.some(f=>f.name.toLowerCase()===n.toLowerCase())) DB.foods.unshift({name:n,type:"u",kcal:k,unit:"ud",q:1});
   dayOf(curISO)[sheetState.mealKey].push({name:n,cantidad:"",kcal:k}); save(); toast("Añadido"); closeSheet(); render(); }
