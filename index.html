@@ -61,6 +61,10 @@
   .toast.show{opacity:.95}
   .foodrow{display:flex; justify-content:space-between; align-items:center; width:100%; padding:10px 12px;
     border:1px solid var(--line); border-radius:12px; background:var(--card); margin-bottom:6px; cursor:pointer; font-size:14px}
+  .chips{display:flex; gap:6px; overflow-x:auto; padding:10px 0}
+  .chip{white-space:nowrap; padding:6px 11px; border:1px solid var(--line); border-radius:999px; background:var(--card); color:var(--sub); font-size:12px; cursor:pointer; flex:none}
+  .chip.on{background:var(--primary); color:#fff; border-color:var(--primary)}
+  .cathead{font-size:12px; font-weight:600; color:var(--sub); margin:12px 0 6px}
   .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; text-align:center}
   .grid2{display:grid; grid-template-columns:repeat(2,1fr); gap:10px}
   label.field{display:block; font-size:12px; color:var(--sub); margin:12px 0 5px}
@@ -132,31 +136,125 @@ function load(){ try{ const d=JSON.parse(localStorage.getItem(LS)); if(d) return
 function save(){ try{ localStorage.setItem(LS, JSON.stringify(DB)); }catch(e){ toast("Almacenamiento lleno: borra alguna foto"); } }
 
 /* ===================== base de alimentos ===================== */
-const FOODS = [
-  ["Pan blanco","w",265,"g",40],["Pan integral","w",245,"g",40],["Pan de panadería","w",270,"g",50],
-  ["Tostada (pan seco)","w",380,"g",30],["Arroz cocido","w",130,"g",200],["Pasta cocida","w",155,"g",200],
-  ["Patata cocida","w",86,"g",200],["Patatas fritas","w",312,"g",150],["Pechuga de pollo","w",110,"g",150],
-  ["Muslo de pollo","w",180,"g",150],["Ternera","w",150,"g",150],["Cerdo (lomo)","w",145,"g",150],
-  ["Merluza","w",90,"g",150],["Salmón","w",208,"g",150],["Atún al natural","w",110,"g",80],
-  ["Atún en aceite","w",190,"g",80],["Tortilla de patata","w",170,"g",150],["Lentejas cocidas","w",116,"g",200],
-  ["Garbanzos cocidos","w",164,"g",200],["Alubias cocidas","w",120,"g",200],["Lechuga","w",15,"g",60],
-  ["Tomate","w",18,"g",100],["Cebolla","w",40,"g",50],["Zanahoria","w",41,"g",60],["Pepino","w",15,"g",80],
-  ["Pimiento","w",20,"g",80],["Aguacate","w",160,"g",70],["Manzana","w",52,"g",150],["Plátano","w",89,"g",120],
-  ["Naranja","w",47,"g",180],["Fresas","w",32,"g",150],["Uvas","w",69,"g",100],["Yogur natural","w",61,"g",125],
-  ["Yogur desnatado","w",45,"g",125],["Leche entera","w",62,"ml",200],["Leche desnatada","w",35,"ml",200],
-  ["Queso curado","w",390,"g",30],["Queso fresco","w",174,"g",60],["Jamón serrano","w",240,"g",40],
-  ["Jamón cocido","w",110,"g",40],["Pavo en lonchas","w",110,"g",40],["Chorizo","w",455,"g",30],
-  ["Almendras","w",579,"g",25],["Nueces","w",654,"g",25],["Aceite de oliva","w",884,"ml",10],
-  ["Chocolate negro","w",546,"g",25],["Galletas","w",460,"g",30],["Patatas chips","w",540,"g",30],
-  ["Pizza","w",266,"g",200],["Croquetas","w",220,"g",100],
-  ["Huevo cocido/frito","u",78,"ud",1],["Tostada con aceite","u",120,"ud",1],["Café solo","u",2,"ud",1],
-  ["Café con leche","u",60,"ud",1],["Cortado","u",25,"ud",1],["Caña de cerveza (33 cl)","u",140,"ud",1],
-  ["Botellín (33 cl)","u",140,"ud",1],["Copa de vino (150 ml)","u",125,"ud",1],
-  ["Tinto de verano (500 ml)","u",200,"ud",1],["Refresco cola (33 cl)","u",139,"ud",1],
-  ["Refresco zero (33 cl)","u",1,"ud",1],["Zumo de naranja (200 ml)","u",90,"ud",1],
-  ["Cerveza sin (33 cl)","u",60,"ud",1],["Gin-tonic","u",180,"ud",1],["Copa de cava (100 ml)","u",80,"ud",1],
-].map(([name,type,kcal,unit,q])=>({name,type,kcal,unit,q}));
-function allFoods(){ return (DB.foods||[]).concat(FOODS); }
+const CATS=[["Ensaladas","🥗"],["Cuchara","🍲"],["Platos combinados","🍽️"],["Carne","🥩"],["Pescado y marisco","🐟"],["Huevos","🥚"],["Verduras","🥦"],["Fruta","🍎"],["Cereales y pan","🍞"],["Legumbres","🫘"],["Lácteos","🧀"],["Frutos secos","🌰"],["Salsas y grasas","🥫"],["Dulces y bollería","🍰"],["Aperitivos","🍟"],["Bebidas","☕"],["Alcohol","🍺"]];
+function mk(cat,emoji,arr){ return arr.map(([name,type,kcal,unit,q])=>({name,type,kcal,unit,q,cat,emoji})); }
+const FOODS=[].concat(
+mk("Ensaladas","🥗",[
+ ["Ensalada mixta","u",150,"ud",1],["Ensalada de lechuga, cebolla, huevo y pavo redondo","u",240,"ud",1],
+ ["Ensalada de lechuga, cebolla, huevo, pavo redondo y aguacate","u",350,"ud",1],["Ensalada de tomate, huevo y atún","u",340,"ud",1],
+ ["Ensalada de tomate, aguacate, huevo y atún","u",390,"ud",1],["Ensalada de tomate, cebolla, aguacate, huevo y queso fresco","u",430,"ud",1],
+ ["Ensalada de pepino, huevo y cebolla","u",200,"ud",1],["Ensalada de garbanzos, tomate, aguacate y huevo","u",540,"ud",1],
+ ["Ensalada campera (patata, atún, huevo)","u",350,"ud",1],["Ensalada de pasta","u",380,"ud",1],["Ensalada de arroz","u",350,"ud",1],
+ ["Ensalada César con pollo","u",400,"ud",1],["Ensalada caprese","u",320,"ud",1],["Ensalada griega","u",300,"ud",1]]),
+mk("Cuchara","🍲",[
+ ["Lentejas guisadas","w",130,"g",250],["Lentejas con chorizo (plato)","u",400,"ud",1],["Garbanzos con espinacas (plato)","u",350,"ud",1],
+ ["Potaje de garbanzos (plato)","u",400,"ud",1],["Cocido/potaje","w",150,"g",300],["Cocido madrileño (plato)","u",600,"ud",1],
+ ["Fabada","w",180,"g",250],["Fabada (plato)","u",550,"ud",1],["Patatas a la riojana","u",380,"ud",1],["Ropa vieja","u",400,"ud",1],
+ ["Pollo guisado con verdura","u",350,"ud",1],["Puré de patata","w",90,"g",200],["Crema de verduras","w",50,"g",250],
+ ["Crema de calabacín (plato)","u",150,"ud",1],["Crema de calabaza (plato)","u",140,"ud",1],["Sopa de fideos","w",40,"g",250],
+ ["Sopa de marisco (plato)","u",200,"ud",1],["Caldo/consomé (plato)","u",40,"ud",1],["Gazpacho","w",40,"g",250],["Salmorejo","w",90,"g",200]]),
+mk("Platos combinados","🍽️",[
+ ["Macarrones con tomate","w",160,"g",250],["Macarrones con chorizo (plato)","u",500,"ud",1],["Espaguetis boloñesa","w",150,"g",250],
+ ["Espaguetis carbonara (plato)","u",600,"ud",1],["Lasaña (porción)","u",450,"ud",1],["Canelones (porción)","u",420,"ud",1],
+ ["Paella","w",180,"g",250],["Arroz a la cubana","u",550,"ud",1],["Arroz tres delicias","u",420,"ud",1],["Arroz con pollo","u",500,"ud",1],
+ ["Fideuá (plato)","u",480,"ud",1],["Risotto (plato)","u",450,"ud",1],["Pizza","w",266,"g",200],["Pizza (porción)","u",285,"ud",1],
+ ["Pollo asado con patatas","u",550,"ud",1],["Pollo al ajillo (plato)","u",450,"ud",1],["Contramuslo de pollo a la plancha","u",220,"ud",1],
+ ["Filete de ternera con patatas","u",600,"ud",1],["Escalope con patatas","u",650,"ud",1],["San jacobo de lomo y queso","u",320,"ud",1],
+ ["San jacobo de pavo y queso","u",280,"ud",1],["Merluza a la plancha con verduras","u",300,"ud",1],["Merluza rebozada con patatas","u",550,"ud",1],
+ ["Salmón a la plancha con verduras","u",400,"ud",1],["Dorada/lubina al horno","u",350,"ud",1],["Bacalao al pilpil","u",400,"ud",1],
+ ["Pescaíto frito (ración)","u",500,"ud",1],["Chuletas de cordero con patatas","u",700,"ud",1],["Entrecot a la plancha","u",450,"ud",1],
+ ["Solomillo con guarnición","u",500,"ud",1],["Hamburguesa completa (pan, carne, queso)","u",550,"ud",1],["Hamburguesa de pollo completa (queso + huevo frito)","u",550,"ud",1],
+ ["Perrito caliente","u",350,"ud",1],["Albóndigas con tomate (plato)","u",450,"ud",1],["Huevos fritos con patatas","u",450,"ud",1],
+ ["Huevos rotos con jamón","u",550,"ud",1],["Revuelto de setas/champiñones","u",250,"ud",1],["Tortilla de patata","w",170,"g",150],
+ ["Tortilla de patatas (pincho)","u",250,"ud",1],["Tortilla francesa","w",160,"g",120],["Ensaladilla rusa","w",150,"g",150],["Empanada","w",280,"g",150],
+ ["Bocadillo de jamón","u",350,"ud",1],["Bocadillo de tortilla","u",500,"ud",1],["Bocadillo de calamares","u",450,"ud",1],["Bocadillo de lomo","u",500,"ud",1],
+ ["Bocadillo de queso","u",450,"ud",1],["Sándwich mixto","u",350,"ud",1],["Sándwich vegetal","u",350,"ud",1],["Döner kebab","u",650,"ud",1],
+ ["Sushi (8 piezas)","u",350,"ud",1],["Wrap (tortilla de trigo)","w",310,"g",60],["Tostada con aceite","u",120,"ud",1],
+ ["Tostadas con aceite y tomate (2)","u",250,"ud",1],["Tostadas con mantequilla y mermelada (2)","u",300,"ud",1],
+ ["Tazón de cereales con leche","u",250,"ud",1],["Bol de avena con leche","u",300,"ud",1],["Yogur con fruta y granola","u",250,"ud",1]]),
+mk("Carne","🥩",[
+ ["Pechuga de pollo","w",110,"g",150],["Muslo de pollo","w",180,"g",150],["Pavo (pechuga)","w",105,"g",150],["Pavo redondo","w",90,"g",40],
+ ["Pavo en lonchas","w",110,"g",40],["Ternera","w",150,"g",150],["Cerdo (lomo)","w",145,"g",150],["Solomillo de cerdo","w",145,"g",150],
+ ["Secreto ibérico","w",300,"g",120],["Costillas de cerdo","w",280,"g",150],["Cordero","w",250,"g",150],["Conejo","w",130,"g",150],
+ ["Hamburguesa (carne)","w",250,"g",125],["Albóndigas","w",230,"g",150],["Jamón serrano","w",240,"g",40],["Jamón cocido","w",110,"g",40],
+ ["Chorizo","w",455,"g",30],["Salchichas","w",300,"g",100],["Salchichón","w",380,"g",30],["Lomo embuchado","w",250,"g",30],
+ ["Longaniza","w",380,"g",50],["Butifarra","w",330,"g",80],["Morcilla","w",380,"g",50],["Sobrasada","w",450,"g",25],["Fuet","w",450,"g",25],
+ ["Mortadela","w",300,"g",40],["Chóped","w",230,"g",40],["Bacon","w",540,"g",30],["Panceta","w",518,"g",30],["Foie/paté","w",450,"g",25]]),
+mk("Pescado y marisco","🐟",[
+ ["Merluza","w",90,"g",150],["Salmón","w",208,"g",150],["Bacalao","w",82,"g",150],["Lubina","w",97,"g",150],["Dorada","w",100,"g",150],
+ ["Trucha","w",148,"g",150],["Rape","w",78,"g",150],["Caballa","w",205,"g",100],["Pez espada/emperador","w",110,"g",150],
+ ["Bonito/atún fresco","w",138,"g",120],["Sardinas","w",208,"g",100],["Boquerones","w",130,"g",100],["Anchoas (conserva)","w",190,"g",30],
+ ["Atún al natural","w",110,"g",80],["Atún en aceite","w",190,"g",80],["Gambas","w",85,"g",100],["Langostinos","w",90,"g",100],
+ ["Calamares","w",92,"g",100],["Sepia","w",80,"g",100],["Pulpo","w",82,"g",100],["Mejillones","w",86,"g",100],["Almejas","w",74,"g",100],
+ ["Berberechos","w",79,"g",80],["Surimi/palitos","w",100,"g",80]]),
+mk("Huevos","🥚",[
+ ["Huevo cocido/frito","u",78,"ud",1],["Huevo frito","u",95,"ud",1],["Clara de huevo","w",52,"g",35]]),
+mk("Verduras","🥦",[
+ ["Lechuga","w",15,"g",60],["Tomate","w",18,"g",100],["Cebolla","w",40,"g",50],["Zanahoria","w",41,"g",60],["Pepino","w",15,"g",80],
+ ["Pimiento","w",20,"g",80],["Aguacate","w",160,"g",70],["Calabacín","w",17,"g",150],["Berenjena","w",25,"g",150],["Judías verdes","w",31,"g",150],
+ ["Espinacas","w",23,"g",100],["Acelgas","w",20,"g",150],["Brócoli","w",34,"g",150],["Coliflor","w",25,"g",150],["Champiñones","w",22,"g",100],
+ ["Setas","w",22,"g",100],["Espárragos","w",20,"g",100],["Guisantes","w",81,"g",100],["Maíz dulce","w",86,"g",80],["Calabaza","w",26,"g",150],
+ ["Alcachofa","w",47,"g",150],["Puerro","w",61,"g",100],["Remolacha","w",43,"g",80],["Habas","w",88,"g",150],["Rúcula","w",25,"g",40],
+ ["Canónigos","w",21,"g",40],["Endibia","w",17,"g",60],["Escarola","w",19,"g",60],["Apio","w",16,"g",80],["Rábano","w",16,"g",50],
+ ["Berros","w",11,"g",40],["Grelos","w",25,"g",150],["Nabo","w",22,"g",100]]),
+mk("Fruta","🍎",[
+ ["Manzana","w",52,"g",150],["Plátano","w",89,"g",120],["Naranja","w",47,"g",180],["Mandarina","w",53,"g",100],["Pera","w",57,"g",160],
+ ["Melocotón","w",39,"g",150],["Nectarina","w",44,"g",150],["Albaricoque","w",48,"g",100],["Ciruela","w",46,"g",80],["Kiwi","w",61,"g",100],
+ ["Fresas","w",32,"g",150],["Frambuesas","w",52,"g",100],["Arándanos","w",57,"g",100],["Moras","w",43,"g",100],["Grosellas","w",56,"g",100],
+ ["Uvas","w",69,"g",100],["Melón","w",34,"g",200],["Sandía","w",30,"g",200],["Piña","w",50,"g",150],["Mango","w",60,"g",150],
+ ["Papaya","w",43,"g",150],["Cerezas","w",63,"g",100],["Higos","w",74,"g",100],["Granada","w",83,"g",120],["Caqui","w",70,"g",150],
+ ["Pomelo","w",42,"g",150],["Chirimoya","w",75,"g",150],["Níspero","w",47,"g",100],["Membrillo","w",38,"g",100],["Coco","w",354,"g",30],
+ ["Pasas","w",299,"g",30],["Ciruela pasa","w",240,"g",30],["Dátiles","w",282,"g",30],["Fruta troceada (bol)","u",100,"ud",1]]),
+mk("Cereales y pan","🍞",[
+ ["Pan blanco","w",265,"g",40],["Pan integral","w",245,"g",40],["Pan de panadería","w",270,"g",50],["Pan de centeno","w",259,"g",40],
+ ["Pan de molde","w",260,"g",30],["Tostada (pan seco)","w",380,"g",30],["Tostada integral","u",80,"ud",1],["Biscotes","w",380,"g",20],
+ ["Colines/picos","w",400,"g",20],["Tortitas de arroz","w",387,"g",10],["Arroz cocido","w",130,"g",200],["Arroz integral cocido","w",111,"g",200],
+ ["Pasta cocida","w",155,"g",200],["Cuscús cocido","w",112,"g",200],["Quinoa cocida","w",120,"g",200],["Cereales","w",375,"g",40],
+ ["Muesli","w",350,"g",40],["Avena (copos)","w",389,"g",40],["Patata cocida","w",86,"g",200],["Patata asada","w",93,"g",200],
+ ["Boniato","w",86,"g",150],["Yuca cocida","w",160,"g",150]]),
+mk("Legumbres","🫘",[
+ ["Lentejas cocidas","w",116,"g",200],["Garbanzos cocidos","w",164,"g",200],["Alubias cocidas","w",120,"g",200],["Tofu","w",144,"g",100],
+ ["Seitán","w",120,"g",100],["Falafel","w",330,"g",80]]),
+mk("Lácteos","🧀",[
+ ["Leche entera","w",62,"ml",200],["Leche desnatada","w",35,"ml",200],["Bebida de avena","w",45,"ml",200],["Bebida de soja","w",40,"ml",200],
+ ["Bebida de almendras","w",24,"ml",200],["Yogur natural","w",61,"g",125],["Yogur desnatado","w",45,"g",125],["Yogur bebible","u",90,"ud",1],
+ ["Petit suisse","u",60,"ud",1],["Kéfir","w",65,"g",125],["Cuajada","w",90,"g",125],["Requesón","w",96,"g",60],["Queso curado","w",390,"g",30],
+ ["Queso fresco","w",174,"g",60],["Mozzarella","w",250,"g",50],["Queso de untar","w",250,"g",30],["Parmesano","w",400,"g",15],
+ ["Queso azul","w",353,"g",30],["Queso brie","w",334,"g",30],["Emmental","w",380,"g",30],["Nata líquida","w",340,"ml",30]]),
+mk("Frutos secos","🌰",[
+ ["Almendras","w",579,"g",25],["Nueces","w",654,"g",25],["Avellanas","w",628,"g",25],["Pistachos","w",560,"g",25],["Cacahuetes","w",567,"g",25],
+ ["Anacardos","w",553,"g",25],["Piñones","w",673,"g",15],["Pipas de girasol","w",584,"g",15],["Pipas de calabaza","w",559,"g",15],["Sésamo","w",573,"g",10]]),
+mk("Salsas y grasas","🥫",[
+ ["Aceite de oliva","w",884,"ml",10],["Mantequilla","w",717,"g",10],["Mayonesa","w",680,"g",15],["Alioli","w",700,"g",15],["Tomate frito","w",90,"g",50],
+ ["Kétchup","w",110,"g",15],["Mostaza","w",100,"g",10],["Bechamel","w",150,"g",60],["Salsa carbonara","w",200,"g",50],["Salsa boloñesa","w",120,"g",80],
+ ["Salsa pesto","w",450,"g",20],["Guacamole","w",150,"g",50],["Hummus","w",170,"g",50]]),
+mk("Dulces y bollería","🍰",[
+ ["Chocolate negro","w",546,"g",25],["Chocolate con leche","w",535,"g",25],["Chocolate blanco","w",539,"g",25],["Bombones","w",560,"g",20],
+ ["Crema de cacao","w",540,"g",20],["Galletas","w",460,"g",30],["Galletas María","w",415,"g",25],["Galletas digestive","w",480,"g",30],
+ ["Barrita de cereales","u",120,"ud",1],["Cruasán/croissant","u",240,"ud",1],["Napolitana de chocolate","u",320,"ud",1],["Palmera","u",300,"ud",1],
+ ["Ensaimada","u",350,"ud",1],["Donut","u",270,"ud",1],["Churro","u",60,"ud",1],["Magdalena","w",400,"g",50],["Bizcocho","w",380,"g",60],
+ ["Tortitas/pancakes","w",227,"g",80],["Gofre","w",290,"g",80],["Crepe","w",180,"g",80],["Tortitas con miel (ración)","u",400,"ud",1],
+ ["Tarta/pastel","w",350,"g",100],["Tarta de queso (porción)","u",350,"ud",1],["Tarta de chocolate (porción)","u",400,"ud",1],["Brownie","u",350,"ud",1],
+ ["Helado","w",207,"g",80],["Helado (bola)","u",100,"ud",1],["Copa de helado","u",300,"ud",1],["Natillas","w",120,"g",125],["Flan","w",130,"g",100],
+ ["Arroz con leche","w",130,"g",150],["Miel","w",304,"g",20],["Mermelada","w",250,"g",20],["Gominolas","w",340,"g",30],["Turrón","w",500,"g",30]]),
+mk("Aperitivos","🍟",[
+ ["Patatas fritas","w",312,"g",150],["Patatas fritas (ración)","u",450,"ud",1],["Patatas chips","w",540,"g",30],["Palomitas","w",480,"g",30],
+ ["Nachos","w",500,"g",30],["Nachos con queso (ración)","u",500,"ud",1],["Aceitunas","w",145,"g",40],["Croquetas","w",220,"g",100],
+ ["Croquetas (ración 4 ud)","u",260,"ud",1],["Patatas bravas (ración)","u",350,"ud",1],["Calamares a la romana (ración)","u",400,"ud",1],
+ ["Gambas al ajillo (ración)","u",250,"ud",1],["Pulpo a la gallega (ración)","u",300,"ud",1],["Pimientos de padrón (ración)","u",120,"ud",1],
+ ["Boquerones en vinagre (ración)","u",200,"ud",1],["Alitas de pollo (ración)","u",450,"ud",1],["Tabla de quesos","u",350,"ud",1],
+ ["Tabla de embutidos","u",350,"ud",1],["Pan con tomate","u",150,"ud",1]]),
+mk("Bebidas","☕",[
+ ["Agua","u",0,"ud",1],["Café solo","u",2,"ud",1],["Café con leche","u",60,"ud",1],["Cortado","u",25,"ud",1],["Capuchino","u",110,"ud",1],
+ ["Té/infusión","u",0,"ud",1],["Té con leche","u",40,"ud",1],["Colacao/leche con cacao","u",120,"ud",1],["Batido de chocolate (250 ml)","u",160,"ud",1],
+ ["Horchata (250 ml)","u",200,"ud",1],["Mosto (200 ml)","u",120,"ud",1],["Zumo de naranja (200 ml)","u",90,"ud",1],["Refresco cola (33 cl)","u",139,"ud",1],
+ ["Refresco zero (33 cl)","u",1,"ud",1]]),
+mk("Alcohol","🍺",[
+ ["Caña de cerveza (33 cl)","u",140,"ud",1],["Botellín (33 cl)","u",140,"ud",1],["Cerveza sin (33 cl)","u",60,"ud",1],["Copa de vino (150 ml)","u",125,"ud",1],
+ ["Copa de cava (100 ml)","u",80,"ud",1],["Tinto de verano (500 ml)","u",200,"ud",1],["Sangría (vaso 250 ml)","u",190,"ud",1],["Vermut (copa)","u",140,"ud",1],
+ ["Sidra (200 ml)","u",90,"ud",1],["Gin-tonic","u",180,"ud",1],["Cubata","u",200,"ud",1],["Whisky/ron (chupito)","u",95,"ud",1],["Chupito/copa (licor)","u",95,"ud",1]])
+);
+function allFoods(){ const custom=(DB.foods||[]).map(f=>({...f,cat:f.cat||"Mis alimentos",emoji:f.emoji||"⭐"})); return custom.concat(FOODS); }
 
 /* ===================== IA opcional (BYOK) ===================== */
 function parseJSON(text){ const c=text.replace(/```json/gi,"").replace(/```/g,"").trim();
@@ -357,12 +455,12 @@ function closeSheet(){ const o=document.getElementById("ov"); if(o) o.remove(); 
 /* ---------- añadir comida ---------- */
 let sheetState=null, _rq="";
 function openAdd(mealKey){ openSheet("");
-  sheetState={mealKey,mode:"buscar",pending:null,text:"",photo:null,result:null,loading:false,err:""}; renderAddSheet(); }
+  sheetState={mealKey,mode:"buscar",cat:"Todos",pending:null,pendingKey:null,text:"",photo:null,result:null,loading:false,err:""}; renderAddSheet(); }
 function renderAddSheet(){
   const s=sheetState; if(!s) return; const c=document.getElementById("sheetC"); if(!c) return;
   const modes=[["buscar","Buscar"],["manual","Manual"]]; if(DB.apiKey) modes.push(["ia","Describir · IA"]);
   let body="";
-  if(s.mode==="buscar"){ body=`<input id="fsearch" placeholder="Buscar alimento…" autocomplete="off"/><div id="fresults" style="margin-top:10px;max-height:46vh;overflow-y:auto"></div>`; }
+  if(s.mode==="buscar"){ body=`<input id="fsearch" placeholder="Buscar alimento o plato…" autocomplete="off"/><div id="fchips" class="chips"></div><div id="fresults" style="max-height:46vh;overflow-y:auto"></div>`; }
   else if(s.mode==="manual"){ body=`<input id="mname" placeholder="Nombre del alimento" autocomplete="off"/>
       <div class="row" style="margin-top:8px"><input id="mkcal" inputmode="numeric" placeholder="kcal" style="width:120px"/>
       <label class="row xs" style="gap:6px;width:auto"><input type="checkbox" id="msave" style="width:auto"/> guardar en mis alimentos</label></div>
@@ -385,29 +483,40 @@ function renderAddSheet(){
       ${s.err?`<div class="xs" style="color:var(--over);margin-top:6px">${esc(s.err)}</div>`:""}${review}`; }
   c.innerHTML=`<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="bold">${MEALS.find(x=>x[0]===s.mealKey)[1]}</span><button class="btn icon" onclick="closeSheet()">✕</button></div>
     <div class="seg" style="margin-bottom:12px">${modes.map(([v,l])=>`<button class="${s.mode===v?'on':''}" onclick="sheetState.mode='${v}';sheetState.result=null;renderAddSheet()">${l}</button>`).join("")}</div>${body}`;
-  if(s.mode==="buscar"){ const inp=document.getElementById("fsearch"); inp.oninput=()=>renderResults(inp.value); renderResults(""); inp.focus(); }
+  if(s.mode==="buscar"){ const inp=document.getElementById("fsearch"); inp.oninput=()=>renderResults(); document.getElementById("fchips").innerHTML=chipsHTML(); renderResults(); inp.focus(); }
   else if(s.mode==="ia"){ const ta=document.getElementById("iatext"); if(ta) ta.oninput=()=>{sheetState.text=ta.value;}; }
 }
-function renderResults(q){ const box=document.getElementById("fresults"); if(!box) return; _rq=q||"";
-  const t=_rq.trim().toLowerCase(); const list=allFoods().filter(f=>!t||f.name.toLowerCase().includes(t)).slice(0,40);
-  box.innerHTML = list.map((f,i)=>{ const sel=sheetState.pending&&sheetState.pending.name===f.name&&sheetState.pending.kcal===f.kcal;
-    const info=f.type==="u"?`${f.kcal} kcal/ud`:`${f.kcal} kcal/100${f.unit}`;
-    let qbar=""; if(sel){ const ul=f.type==="u"?"uds":f.unit;
-      qbar=`<div class="row" style="margin:6px 0 10px;gap:8px"><input id="qty" inputmode="decimal" value="${f.q}" style="width:90px"/><span class="xs muted">${ul}</span><span class="xs muted" id="qkcal"></span><button class="btn green" style="margin-left:auto" onclick="confirmFood()">Añadir</button></div>`; }
-    return `<div>${f.img?`<div class="foodrow" onclick="pickFood(${i})"><span class="row" style="gap:8px"><img class="thumb" src="data:image/jpeg;base64,${f.img}"/>${esc(f.name)}</span><span class="xs muted tnum">${info}</span></div>`
-      :`<div class="foodrow" onclick="pickFood(${i})"><span>${esc(f.name)}</span><span class="xs muted tnum">${info}</span></div>`}${qbar}</div>`;
-  }).join("") || `<div class="xs muted" style="padding:8px">Sin resultados. Usa la pestaña Manual.</div>`;
-  if(sheetState.pending){ const qi=document.getElementById("qty"); if(qi){ qi.oninput=updQ; updQ(); qi.focus(); } }
-}
-function pickFood(i){ const t=_rq.trim().toLowerCase(); const list=allFoods().filter(f=>!t||f.name.toLowerCase().includes(t)).slice(0,40);
-  sheetState.pending=list[i]; renderResults(_rq); }
+function key(f){ return f.name+"|"+f.kcal+"|"+f.unit; }
+function rowHTML(f,i){ const sel=sheetState.pendingKey===key(f);
+  const info=f.type==="u"?`${f.kcal} kcal/ud`:`${f.kcal} kcal/100${f.unit}`;
+  const left=f.img?`<img class="thumb" src="data:image/jpeg;base64,${f.img}"/>`:`<span style="width:24px;text-align:center;flex:none">${f.emoji||"•"}</span>`;
+  let qbar=""; if(sel){ const ul=f.type==="u"?"uds":f.unit;
+    qbar=`<div class="row" style="margin:6px 0 10px;gap:8px"><input id="qty" inputmode="decimal" value="${f.q}" style="width:90px"/><span class="xs muted">${ul}</span><span class="xs muted" id="qkcal"></span><button class="btn green" style="margin-left:auto" onclick="confirmFood()">Añadir</button></div>`; }
+  return `<div><div class="foodrow" onclick="pickFood(${i})"><span class="row" style="gap:8px;min-width:0">${left}<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(f.name)}</span></span><span class="xs muted tnum" style="flex:none">${info}</span></div>${qbar}</div>`; }
+function chipsHTML(){ const cats=["Todos"].concat(CATS.map(c=>c[0]));
+  return cats.map(c=>`<button class="chip ${(sheetState.cat||"Todos")===c?"on":""}" onclick="selCat('${c}')">${c}</button>`).join(""); }
+function selCat(c){ sheetState.cat=c; sheetState.pending=null; sheetState.pendingKey=null;
+  const fs=document.getElementById("fsearch"); if(fs) fs.value="";
+  const ch=document.getElementById("fchips"); if(ch) ch.innerHTML=chipsHTML(); renderResults(); }
+function renderResults(){ const box=document.getElementById("fresults"); if(!box) return;
+  const t=(document.getElementById("fsearch")?document.getElementById("fsearch").value:"").trim().toLowerCase();
+  const cat=sheetState.cat||"Todos"; const foods=allFoods(); const byName=(a,b)=>a.name.localeCompare(b.name,"es");
+  let flat=[], html="";
+  if(t){ const L=foods.filter(f=>f.name.toLowerCase().includes(t)).sort(byName); flat=L; html=L.map((f,i)=>rowHTML(f,i)).join(""); }
+  else if(cat!=="Todos"){ const L=foods.filter(f=>(f.cat||"Mis alimentos")===cat).sort(byName); flat=L; html=L.map((f,i)=>rowHTML(f,i)).join(""); }
+  else { const groups=CATS.concat([["Mis alimentos","⭐"]]);
+    groups.forEach(([name,emoji])=>{ const L=foods.filter(f=>(f.cat||"Mis alimentos")===name).sort(byName); if(!L.length) return;
+      html+=`<div class="cathead">${emoji} ${name}</div>`; L.forEach(f=>{ html+=rowHTML(f,flat.length); flat.push(f); }); }); }
+  sheetState._list=flat; box.innerHTML=html||`<div class="xs muted" style="padding:8px">Sin resultados. Usa la pestaña Manual.</div>`;
+  if(sheetState.pendingKey){ const qi=document.getElementById("qty"); if(qi){ qi.oninput=updQ; updQ(); qi.focus(); } } }
+function pickFood(i){ sheetState.pending=sheetState._list[i]; sheetState.pendingKey=key(sheetState.pending); renderResults(); }
 function kcalOf(f,qty){ return f.type==="u"?Math.round(f.kcal*qty):Math.round(f.kcal*qty/100); }
 function updQ(){ const f=sheetState.pending,qi=document.getElementById("qty"),o=document.getElementById("qkcal");
   if(f&&qi&&o) o.textContent="= "+es(kcalOf(f,parseFloat(qi.value)||0))+" kcal"; }
 function confirmFood(){ const f=sheetState.pending,qi=document.getElementById("qty"),qty=parseFloat(qi.value)||0; if(!f||qty<=0) return;
   const cant=f.type==="u"?`${es(qty)} ud`:`${es(qty)} ${f.unit}`;
   dayOf(curISO)[sheetState.mealKey].push({name:f.name,cantidad:cant,kcal:kcalOf(f,qty)});
-  save(); sheetState.pending=null; toast("Añadido"); render(); renderResults(_rq); }
+  save(); sheetState.pending=null; sheetState.pendingKey=null; toast("Añadido"); render(); renderResults(); }
 function addManual(){ const n=document.getElementById("mname").value.trim(),k=Math.round(parseFloat(document.getElementById("mkcal").value)||0); if(!n||!(k>=0)) return;
   if(document.getElementById("msave").checked && !DB.foods.some(f=>f.name.toLowerCase()===n.toLowerCase())) DB.foods.unshift({name:n,type:"u",kcal:k,unit:"ud",q:1});
   dayOf(curISO)[sheetState.mealKey].push({name:n,cantidad:"",kcal:k}); save(); toast("Añadido"); closeSheet(); render(); }
