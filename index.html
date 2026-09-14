@@ -127,12 +127,12 @@ const DEF_SETTINGS = { onboarded:false, nombre:"", apellidos:"", sex:"hombre", a
   activity:1.375, monthlyGoalKg:1.0, targetMode:"auto", manualTarget:2000, pesoObjetivo:78, addExercise:false };
 function normalize(d){
   d.settings = {...DEF_SETTINGS, ...(d.settings||{})};
-  d.foods = d.foods||[]; d.days = d.days||{}; d.apiKey = d.apiKey||"";
+  d.foods = d.foods||[]; d.days = d.days||{}; d.apiKey = d.apiKey||""; d.overrides = d.overrides||{};
   d.weights = (d.weights||[]).map(w=> w.week ? w : ({week:mondayOf(w.date||todayISO()), kg:w.kg, date:w.date||todayISO()}));
   return d;
 }
 function load(){ try{ const d=JSON.parse(localStorage.getItem(LS)); if(d) return normalize(d); }catch(e){}
-  return { settings:{...DEF_SETTINGS}, foods:[], days:{}, weights:[], apiKey:"" }; }
+  return { settings:{...DEF_SETTINGS}, foods:[], days:{}, weights:[], apiKey:"", overrides:{} }; }
 function save(){ try{ localStorage.setItem(LS, JSON.stringify(DB)); }catch(e){ toast("Almacenamiento lleno: borra alguna foto"); } }
 
 /* ===================== base de alimentos ===================== */
@@ -254,7 +254,7 @@ mk("Alcohol","🍺",[
  ["Copa de cava (100 ml)","u",80,"ud",1],["Tinto de verano (500 ml)","u",200,"ud",1],["Sangría (vaso 250 ml)","u",190,"ud",1],["Vermut (copa)","u",140,"ud",1],
  ["Sidra (200 ml)","u",90,"ud",1],["Gin-tonic","u",180,"ud",1],["Cubata","u",200,"ud",1],["Whisky/ron (chupito)","u",95,"ud",1],["Chupito/copa (licor)","u",95,"ud",1]])
 );
-function allFoods(){ const custom=(DB.foods||[]).map(f=>({...f,cat:f.cat||"Mis alimentos",emoji:f.emoji||"⭐"})); return custom.concat(FOODS); }
+function allFoods(){ const custom=(DB.foods||[]).map(f=>({...f,cat:f.cat||"Mis alimentos",emoji:f.emoji||"⭐"})); const n=new Set(custom.map(f=>f.name.toLowerCase())); const ov=DB.overrides||{}; const base=FOODS.filter(f=>!n.has(f.name.toLowerCase())).map(f=>{ const o=ov[f.name]; return o?{...f,kcal:(o.kcal!=null?o.kcal:f.kcal),q:(o.q!=null?o.q:f.q)}:f; }); return custom.concat(base); }
 
 /* ===================== IA opcional (BYOK) ===================== */
 function parseJSON(text){ const c=text.replace(/```json/gi,"").replace(/```/g,"").trim();
@@ -297,6 +297,18 @@ function fileToBase64(file,max=1100,q=.82){
     img.onerror=reject; img.src=url; });
 }
 const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+let _rec=null;
+function dictateInto(id,numeric){ if(!SR) return; if(_rec){ try{_rec.stop();}catch(e){} }
+  const el=document.getElementById(id); if(!el) return;
+  const rec=new SR(); _rec=rec; rec.lang="es-ES"; rec.interimResults=false; rec.maxAlternatives=1;
+  const b=document.getElementById("mic_"+id); if(b) b.textContent="⏺";
+  rec.onresult=e=>{ let t=e.results[0][0].transcript.trim();
+    if(numeric){ const d=(t.match(/\d+([.,]\d+)?/)||[])[0]; t=d?d.replace(",","."):t; el.value=t; }
+    else { el.value = el.value ? (el.value+" "+t) : t; }
+    el.dispatchEvent(new Event("input")); };
+  rec.onend=()=>{ _rec=null; const bb=document.getElementById("mic_"+id); if(bb) bb.textContent="🎤"; };
+  rec.onerror=()=>{ _rec=null; }; rec.start(); }
+function micBtn(id,numeric){ return SR?`<button type="button" class="btn icon" id="mic_${id}" onclick="dictateInto('${id}',${numeric?"true":"false"})" title="Dictar">🎤</button>`:""; }
 
 /* ===================== estado ===================== */
 let DB, tab="diario", curISO=todayISO();
@@ -421,19 +433,43 @@ function delFood(k,i){ dayOf(curISO)[k].splice(i,1); save(); render(); }
 function delEx(i){ dayOf(curISO).ejercicio.splice(i,1); save(); render(); }
 
 /* ---------- editar ítem de comida ---------- */
-function openEditFood(k,i){
-  const it=dayOf(curISO)[k][i];
-  const s=openSheet(`<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="bold">Editar</span><button class="btn icon" onclick="closeSheet()">✕</button></div>
+function openEditFood(k,i){ const it=dayOf(curISO)[k][i];
+  if(it.base){ const b=it.base; const ul=b.type==="u"?"uds":b.unit; const cq=it.qty!=null?it.qty:1;
+    openSheet(`<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="bold">Editar</span><button class="btn icon" onclick="closeSheet()">✕</button></div>
+    <label class="field" style="margin-top:0">Alimento</label><input id="e_n" value="${esc(it.name)}"/>
+    <label class="field">Cantidad (${ul})</label><input id="e_q" inputmode="decimal" value="${cq}" oninput="const q=parseFloat(this.value)||0;document.getElementById('e_k').value=kcalOf({type:'${b.type}',kcal:${b.kcal}},q)"/>
+    <label class="field">Calorías (se recalculan; puedes ajustarlas)</label><input id="e_k" inputmode="numeric" value="${it.kcal}"/>
+    <button class="btn primary" style="width:100%;margin-top:14px" onclick="saveEditFood('${k}',${i},1)">Guardar</button>`);
+  } else {
+    openSheet(`<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="bold">Editar</span><button class="btn icon" onclick="closeSheet()">✕</button></div>
     <label class="field" style="margin-top:0">Alimento</label><input id="e_n" value="${esc(it.name)}"/>
     <label class="field">Cantidad (texto libre)</label><input id="e_c" value="${esc(it.cantidad||'')}"/>
     <label class="field">Calorías</label><input id="e_k" inputmode="numeric" value="${it.kcal}"/>
-    <button class="btn primary" style="width:100%;margin-top:14px" onclick="saveEditFood('${k}',${i})">Guardar</button>`);
+    <button class="btn primary" style="width:100%;margin-top:14px" onclick="saveEditFood('${k}',${i},0)">Guardar</button>`);
+  }
 }
-function saveEditFood(k,i){ const it=dayOf(curISO)[k][i];
+function saveEditFood(k,i,hasBase){ const it=dayOf(curISO)[k][i];
   it.name=document.getElementById("e_n").value.trim()||it.name;
-  it.cantidad=document.getElementById("e_c").value.trim();
+  if(hasBase){ const q=parseFloat(document.getElementById("e_q").value)||0; it.qty=q; it.cantidad=`${es(q)} ${it.base.type==="u"?"ud":it.base.unit}`; }
+  else { it.cantidad=document.getElementById("e_c").value.trim(); }
   it.kcal=Math.max(0,Math.round(parseFloat(document.getElementById("e_k").value)||0));
   save(); closeSheet(); render(); }
+function openFoodEdit(i){ const f=sheetState._list[i]; if(!f) return;
+  const custom=(DB.foods||[]).some(x=>x.name.toLowerCase()===f.name.toLowerCase());
+  const ov=(DB.overrides||{})[f.name]; const unitLbl=f.type==="u"?"kcal por unidad":("kcal por 100 "+f.unit); const ul=f.type==="u"?"uds":f.unit;
+  openSheet(`<div class="row" style="justify-content:space-between;margin-bottom:12px"><span class="bold">Editar alimento</span><button class="btn icon" onclick="closeSheet()">✕</button></div>
+    <label class="field" style="margin-top:0">Nombre</label>${custom?`<input id="fe_n" value="${esc(f.name)}"/>`:`<div class="sm" style="padding:4px 0">${esc(f.name)}</div>`}
+    <label class="field">${unitLbl}</label><input id="fe_k" inputmode="numeric" value="${f.kcal}"/>
+    <label class="field">Ración por defecto (${ul})</label><input id="fe_q" inputmode="decimal" value="${f.q}"/>
+    <div class="row" style="margin-top:14px;gap:8px"><button class="btn primary" style="flex:1" onclick="saveFoodEdit(${i},${custom?1:0})">Guardar</button>${(!custom&&ov)?`<button class="btn" onclick="resetOverride(${i})">Restablecer</button>`:""}</div>
+    ${!custom?`<div class="xs muted" style="margin-top:8px">Editas un alimento de la base; se guarda como tu ajuste personal para este alimento.</div>`:""}`);
+}
+function saveFoodEdit(i,custom){ const f=sheetState._list[i]; if(!f) return;
+  const k=Math.max(0,Math.round(parseFloat(document.getElementById("fe_k").value)||0)); const q=parseFloat(document.getElementById("fe_q").value)||f.q;
+  if(custom){ const nm=document.getElementById("fe_n").value.trim()||f.name; const e=DB.foods.find(x=>x.name.toLowerCase()===f.name.toLowerCase()); if(e){ e.name=nm; e.kcal=k; e.q=q; } }
+  else { DB.overrides=DB.overrides||{}; DB.overrides[f.name]={kcal:k,q:q}; }
+  save(); closeSheet(); toast("Guardado"); renderResults(); }
+function resetOverride(i){ const f=sheetState._list[i]; if(f&&DB.overrides){ delete DB.overrides[f.name]; save(); } closeSheet(); toast("Restablecido"); renderResults(); }
 
 /* ---------- editar ejercicio ---------- */
 function openEditEx(i){ const it=dayOf(curISO).ejercicio[i];
@@ -460,9 +496,9 @@ function renderAddSheet(){
   const s=sheetState; if(!s) return; const c=document.getElementById("sheetC"); if(!c) return;
   const modes=[["buscar","Buscar"],["manual","Manual"]]; if(DB.apiKey) modes.push(["ia","Describir · IA"]);
   let body="";
-  if(s.mode==="buscar"){ body=`<input id="fsearch" placeholder="Buscar alimento o plato…" autocomplete="off"/><div id="fchips" class="chips"></div><div id="fresults" style="max-height:46vh;overflow-y:auto"></div>`; }
-  else if(s.mode==="manual"){ body=`<input id="mname" placeholder="Nombre del alimento" autocomplete="off"/>
-      <div class="row" style="margin-top:8px"><input id="mkcal" inputmode="numeric" placeholder="kcal" style="width:120px"/>
+  if(s.mode==="buscar"){ body=`<div class="row"><input id="fsearch" placeholder="Buscar alimento o plato…" autocomplete="off"/>${micBtn("fsearch",false)}</div><div id="fchips" class="chips"></div><div id="fresults" style="max-height:46vh;overflow-y:auto"></div>`; }
+  else if(s.mode==="manual"){ body=`<div class="row"><input id="mname" placeholder="Nombre del alimento" autocomplete="off"/>${micBtn("mname",false)}</div>
+      <div class="row" style="margin-top:8px"><input id="mkcal" inputmode="numeric" placeholder="kcal" style="width:120px"/>${micBtn("mkcal",true)}
       <label class="row xs" style="gap:6px;width:auto"><input type="checkbox" id="msave" style="width:auto"/> guardar en mis alimentos</label></div>
       <button class="btn primary" style="margin-top:10px;width:100%" onclick="addManual()">Añadir</button>`; }
   else { const ph=s.mealKey==="extra"?"Ej: 2 cañas de 33 cl y un tinto de verano":"Ej: ensalada de lechuga, tomate, cebolla, pavo y huevo cocido";
@@ -491,8 +527,8 @@ function rowHTML(f,i){ const sel=sheetState.pendingKey===key(f);
   const info=f.type==="u"?`${f.kcal} kcal/ud`:`${f.kcal} kcal/100${f.unit}`;
   const left=f.img?`<img class="thumb" src="data:image/jpeg;base64,${f.img}"/>`:`<span style="width:24px;text-align:center;flex:none">${f.emoji||"•"}</span>`;
   let qbar=""; if(sel){ const ul=f.type==="u"?"uds":f.unit;
-    qbar=`<div class="row" style="margin:6px 0 10px;gap:8px"><input id="qty" inputmode="decimal" value="${f.q}" style="width:90px"/><span class="xs muted">${ul}</span><span class="xs muted" id="qkcal"></span><button class="btn green" style="margin-left:auto" onclick="confirmFood()">Añadir</button></div>`; }
-  return `<div><div class="foodrow" onclick="pickFood(${i})"><span class="row" style="gap:8px;min-width:0;flex:1;align-items:flex-start">${left}<span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)}</span></span><span class="xs muted tnum" style="flex:none;padding-left:8px">${info}</span></div>${qbar}</div>`; }
+    qbar=`<div class="row" style="margin:6px 0 10px;gap:8px"><input id="qty" inputmode="decimal" value="${f.q}" style="width:90px"/>${micBtn("qty",true)}<span class="xs muted">${ul}</span><span class="xs muted" id="qkcal"></span><button class="btn green" style="margin-left:auto" onclick="confirmFood()">Añadir</button></div>`; }
+  return `<div><div class="foodrow" onclick="pickFood(${i})"><span class="row" style="gap:8px;min-width:0;flex:1;align-items:flex-start">${left}<span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)}</span></span><span class="row" style="flex:none;padding-left:8px;gap:6px;align-items:center"><span class="xs muted tnum">${info}</span><button class="ib" onclick="event.stopPropagation();openFoodEdit(${i})">✏️</button></span></div>${qbar}</div>`; }
 function chipsHTML(){ const cats=["Todos"].concat(CATS.map(c=>c[0]));
   return cats.map(c=>`<button class="chip ${(sheetState.cat||"Todos")===c?"on":""}" onclick="selCat('${c}')">${c}</button>`).join(""); }
 function selCat(c){ sheetState.cat=c; sheetState.pending=null; sheetState.pendingKey=null;
@@ -515,7 +551,7 @@ function updQ(){ const f=sheetState.pending,qi=document.getElementById("qty"),o=
   if(f&&qi&&o) o.textContent="= "+es(kcalOf(f,parseFloat(qi.value)||0))+" kcal"; }
 function confirmFood(){ const f=sheetState.pending,qi=document.getElementById("qty"),qty=parseFloat(qi.value)||0; if(!f||qty<=0) return;
   const cant=f.type==="u"?`${es(qty)} ud`:`${es(qty)} ${f.unit}`;
-  dayOf(curISO)[sheetState.mealKey].push({name:f.name,cantidad:cant,kcal:kcalOf(f,qty)});
+  dayOf(curISO)[sheetState.mealKey].push({name:f.name,cantidad:cant,kcal:kcalOf(f,qty),base:{type:f.type,kcal:f.kcal,unit:f.unit},qty:qty});
   save(); sheetState.pending=null; sheetState.pendingKey=null; toast("Añadido"); render(); renderResults(); }
 function addManual(){ const n=document.getElementById("mname").value.trim(),k=Math.round(parseFloat(document.getElementById("mkcal").value)||0); if(!n||!(k>=0)) return;
   if(document.getElementById("msave").checked && !DB.foods.some(f=>f.name.toLowerCase()===n.toLowerCase())) DB.foods.unshift({name:n,type:"u",kcal:k,unit:"ud",q:1});
@@ -715,7 +751,8 @@ function setRitmo(v){ DB.settings.monthlyGoalKg=parseFloat(v)||0; save();
 function saveKey(){ DB.apiKey=document.getElementById("apikey").value.trim(); save(); toast(DB.apiKey?"Clave guardada":"Clave vacía"); render(); }
 
 /* ===================== Mis alimentos (drawer) ===================== */
-let repoDraft=null, repoBusy=false, repoMsg="", repoImg=null;
+let repoDraft=null, repoBusy=false, repoMsg="", repoImg=null, repoForm={name:"",kcal:"",type:"ud"};
+function captureRepoForm(){ const n=document.getElementById("rn"),k=document.getElementById("rk"),t=document.getElementById("rt"); if(n) repoForm.name=n.value; if(k) repoForm.kcal=k.value; if(t) repoForm.type=t.value; }
 function openRepo(){ if(!DB.settings.onboarded) return;
   const dv=document.createElement("div"); dv.className="drawer"; dv.id="repoDrawer"; dv.onclick=e=>{ if(e.target===dv) dv.remove(); };
   dv.innerHTML=`<div class="panel" id="repoPanel"></div>`; document.body.appendChild(dv); renderRepo(); }
@@ -731,9 +768,9 @@ function renderRepo(){ const hasAI=!!DB.apiKey, p=document.getElementById("repoP
       <div class="row" style="margin-top:8px"><input id="dkcal" inputmode="numeric" value="${repoDraft.kcal100}" style="width:100px"/><span class="xs muted">kcal/100 ${repoDraft.unidad}</span>
       <button class="btn green" style="margin-left:auto" onclick="saveDraft()">Guardar</button></div></div>`:""}
     <div class="card" style="padding:12px;margin-top:12px"><div class="xs muted" style="margin-bottom:6px">Añadir a mano</div>
-      <input id="rn" placeholder="Nombre (ej: Pavo redondo)"/>
-      <div class="row" style="margin-top:8px"><input id="rk" inputmode="numeric" placeholder="kcal" style="width:96px"/>
-        <select id="rt" style="width:auto"><option value="ud">por unidad</option><option value="g">/100 g</option><option value="ml">/100 ml</option></select>
+      <div class="row"><input id="rn" placeholder="Nombre (ej: Pavo redondo)" value="${esc(repoForm.name)}" oninput="repoForm.name=this.value"/>${micBtn("rn",false)}</div>
+      <div class="row" style="margin-top:8px"><input id="rk" inputmode="numeric" placeholder="kcal" style="width:96px" value="${esc(repoForm.kcal)}" oninput="repoForm.kcal=this.value"/>${micBtn("rk",true)}
+        <select id="rt" style="width:auto" onchange="repoForm.type=this.value"><option value="ud" ${repoForm.type==="ud"?"selected":""}>por unidad</option><option value="g" ${repoForm.type==="g"?"selected":""}>/100 g</option><option value="ml" ${repoForm.type==="ml"?"selected":""}>/100 ml</option></select>
         <button class="btn icon" onclick="document.getElementById('rimg').click()" title="Adjuntar foto">📷</button>
         <input type="file" id="rimg" accept="image/*" capture="environment" style="display:none" onchange="repoAttach(this.files[0])"/>
         <button class="btn primary" style="margin-left:auto" onclick="repoAdd()">Añadir</button></div>
@@ -746,14 +783,14 @@ function renderRepo(){ const hasAI=!!DB.apiKey, p=document.getElementById("repoP
 async function scanLabel(file){ if(!file) return; repoBusy=true; repoMsg=""; repoDraft=null; renderRepo();
   try{ const img=await fileToBase64(file); repoDraft=await aiScanLabel(img); repoImg=(await fileToBase64(file,380,.55)).data; }
   catch(e){ repoMsg="No pude leer la etiqueta ("+e.message+")."; } repoBusy=false; renderRepo(); }
-async function repoAttach(file){ if(!file) return; try{ repoImg=(await fileToBase64(file,380,.55)).data; renderRepo(); }catch(e){ repoMsg="No pude leer la foto."; renderRepo(); } }
+async function repoAttach(file){ if(!file) return; captureRepoForm(); try{ repoImg=(await fileToBase64(file,380,.55)).data; renderRepo(); }catch(e){ repoMsg="No pude leer la foto."; renderRepo(); } }
 function saveDraft(){ const n=document.getElementById("dnombre").value.trim(),k=Math.round(parseFloat(document.getElementById("dkcal").value)||0); if(!n) return;
   DB.foods=DB.foods.filter(f=>f.name.toLowerCase()!==n.toLowerCase()); DB.foods.unshift({name:n,type:"w",kcal:k,unit:repoDraft.unidad,q:100,img:repoImg||undefined});
   save(); repoDraft=null; repoImg=null; toast("Guardado"); renderRepo(); }
 function repoAdd(){ const n=document.getElementById("rn").value.trim(),k=Math.round(parseFloat(document.getElementById("rk").value)||0),t=document.getElementById("rt").value; if(!n||!(k>=0)) return;
   DB.foods=DB.foods.filter(f=>f.name.toLowerCase()!==n.toLowerCase());
   DB.foods.unshift(t==="ud"?{name:n,type:"u",kcal:k,unit:"ud",q:1,img:repoImg||undefined}:{name:n,type:"w",kcal:k,unit:t,q:100,img:repoImg||undefined});
-  save(); repoImg=null; toast("Añadido"); renderRepo(); }
+  save(); repoImg=null; repoForm={name:"",kcal:"",type:"ud"}; toast("Añadido"); renderRepo(); }
 function repoDel(i){ DB.foods.splice(i,1); save(); renderRepo(); }
 
 /* ===================== datos ===================== */
