@@ -826,12 +826,12 @@ function resetAll(){ if(confirm("¿Borrar TODOS los datos (incluidos tus datos p
 
 /* ===================== nube (Firebase, opcional) ===================== */
 const FIREBASE_CONFIG = {
-  apiKey: "PEGA_AQUI_TU_API_KEY",
-  authDomain: "TU-PROYECTO.firebaseapp.com",
-  projectId: "TU-PROYECTO",
-  storageBucket: "TU-PROYECTO.appspot.com",
-  messagingSenderId: "PEGA_AQUI",
-  appId: "PEGA_AQUI"
+  apiKey: "AIzaSyBPcGyfUuPymNB0xzIEQfB51FN1_QGxJqU",
+  authDomain: "model-creek-437508-q2.firebaseapp.com",
+  projectId: "model-creek-437508-q2",
+  storageBucket: "model-creek-437508-q2.firebasestorage.app",
+  messagingSenderId: "158064892386",
+  appId: "1:158064892386:web:e04d344eeb42f9f0d6c1bb"
 };
 const CLOUD_ON = (typeof firebase!=="undefined") && FIREBASE_CONFIG.apiKey.indexOf("PEGA_AQUI")!==0;
 let fbAuth=null, fbDb=null, fbUser=null, _pushT=null, cloudMsg="";
@@ -859,7 +859,9 @@ function cloudPush(now){ if(!cloudReady()||!fbUser) return; clearTimeout(_pushT)
   const doIt=()=>{ try{ const c=JSON.parse(JSON.stringify(DB)); delete c.apiKey; c.updatedAt=DB.updatedAt||Date.now(); fbDb.collection("users").doc(fbUser.uid).set(c); }catch(e){} };
   if(now) doIt(); else _pushT=setTimeout(doIt,1500); }
 function cloudCardHTML(){
-  if(!CLOUD_ON) return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Sincronización en la nube ☁️</div><div class="xs muted">Para activarla, pega la configuración de tu proyecto de Firebase en el archivo (variable FIREBASE_CONFIG, arriba del todo) y vuelve a subirlo.</div></div>`;
+  if(!CLOUD_ON){ const noSdk=(typeof firebase==="undefined");
+    const msg = noSdk ? "No se han cargado las librerías de Firebase. Suele ser la versión antigua en caché o un bloqueador: abre la URL añadiéndole ?v=2 al final, o recarga forzando." : "Falta la configuración de Firebase en el archivo subido. Sube la ÚLTIMA versión del index.html a GitHub y recarga.";
+    return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Sincronización en la nube ☁️</div><div class="xs muted">${msg}</div></div>`; }
   if(fbUser) return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Nube ☁️</div><div class="sm">Sesión: <b>${esc(fbUser.email||"")}</b></div><div class="xs" style="color:var(--under);margin:4px 0 10px">Tus datos se guardan en la nube automáticamente.</div><div class="row wrap"><button class="btn" onclick="cloudPush(true);toast('Sincronizado')">Sincronizar ahora</button><button class="btn" onclick="cloudSignOut()">Cerrar sesión</button></div></div>`;
   return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Nube ☁️</div><p class="xs muted" style="margin:0 0 10px">Entra con tu email para guardar tus datos en la nube y recuperarlos si borras el navegador o cambias de móvil.</p><input id="cl_em" type="email" placeholder="Email" autocomplete="username"/><input id="cl_pw" type="password" placeholder="Contraseña (mín. 6)" autocomplete="current-password" style="margin-top:8px"/><div class="row" style="margin-top:10px"><button class="btn primary" onclick="cloudSignIn()">Entrar</button><button class="btn" onclick="cloudSignUp()">Crear cuenta</button></div>${cloudMsg?`<div class="xs" style="color:var(--over);margin-top:8px">${esc(cloudMsg)}</div>`:""}</div>`;
 }
