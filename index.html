@@ -8,6 +8,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="Calorías" />
 <title>Contador de calorías</title>
+<script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#FBFBF9; --ink:#17181A; --sub:#6B7280; --line:#E6E4DD; --card:#FFFFFF;
@@ -124,16 +127,17 @@ function kcalSteps(steps,w){ return Math.round(steps*w*0.0005); }
 /* ===================== almacenamiento ===================== */
 const LS = "contador_calorias_v1";
 const DEF_SETTINGS = { onboarded:false, nombre:"", apellidos:"", sex:"hombre", age:40, height:175, weight:90,
-  activity:1.375, monthlyGoalKg:1.0, targetMode:"auto", manualTarget:2000, pesoObjetivo:78, addExercise:false };
+  activity:1.375, monthlyGoalKg:1.0, targetMode:"auto", manualTarget:2000, pesoObjetivo:78, addExercise:false, lastBackup:"" };
 function normalize(d){
   d.settings = {...DEF_SETTINGS, ...(d.settings||{})};
-  d.foods = d.foods||[]; d.days = d.days||{}; d.apiKey = d.apiKey||""; d.overrides = d.overrides||{};
+  d.foods = d.foods||[]; d.days = d.days||{}; d.apiKey = d.apiKey||""; d.overrides = d.overrides||{}; d.updatedAt = d.updatedAt||0;
   d.weights = (d.weights||[]).map(w=> w.week ? w : ({week:mondayOf(w.date||todayISO()), kg:w.kg, date:w.date||todayISO()}));
   return d;
 }
 function load(){ try{ const d=JSON.parse(localStorage.getItem(LS)); if(d) return normalize(d); }catch(e){}
-  return { settings:{...DEF_SETTINGS}, foods:[], days:{}, weights:[], apiKey:"", overrides:{} }; }
-function save(){ try{ localStorage.setItem(LS, JSON.stringify(DB)); }catch(e){ toast("Almacenamiento lleno: borra alguna foto"); } }
+  return { settings:{...DEF_SETTINGS}, foods:[], days:{}, weights:[], apiKey:"", overrides:{}, updatedAt:0 }; }
+function saveLocal(){ try{ localStorage.setItem(LS, JSON.stringify(DB)); }catch(e){ toast("Almacenamiento lleno: borra alguna foto"); } }
+function save(){ DB.updatedAt=Date.now(); saveLocal(); cloudPush(); }
 
 /* ===================== base de alimentos ===================== */
 const CATS=[["Ensaladas","🥗"],["Cuchara","🍲"],["Platos combinados","🍽️"],["Carne","🥩"],["Pescado y marisco","🐟"],["Huevos","🥚"],["Verduras","🥦"],["Fruta","🍎"],["Cereales y pan","🍞"],["Legumbres","🫘"],["Lácteos","🧀"],["Frutos secos","🌰"],["Salsas y grasas","🥫"],["Dulces y bollería","🍰"],["Aperitivos","🍟"],["Bebidas","☕"],["Alcohol","🍺"]];
@@ -358,7 +362,8 @@ function renderOnboarding(){
     <label class="field">Ritmo de pérdida: <b id="o_rlbl">${es(s.monthlyGoalKg)}</b> kg/mes</label>
     <input id="o_ritmo" type="range" min="0.5" max="3" step="0.25" value="${s.monthlyGoalKg}" style="padding:0" oninput="document.getElementById('o_rlbl').textContent=es(parseFloat(this.value))"/>
     <button class="btn primary" style="width:100%;margin-top:16px" onclick="finishOnboarding()">Empezar</button>
-  </div>`;
+  </div>
+  ${CLOUD_ON&&!fbUser?`<div style="margin-top:4px">${cloudCardHTML()}<div class="xs muted" style="padding:0 4px;margin-top:6px">¿Ya usabas la app? Entra con tu cuenta para recuperar tus datos sin volver a rellenar nada.</div></div>`:""}`;
   document.querySelectorAll("#o_sex button").forEach(b=>b.onclick=()=>{ DB.settings.sex=b.dataset.v;
     document.querySelectorAll("#o_sex button").forEach(x=>x.classList.toggle("on",x===b)); });
 }
@@ -402,6 +407,8 @@ function renderDiario(m){
   let mondayBanner="";
   if(isMonday(todayISO()) && curISO===todayISO() && !DB.weights.some(w=>w.week===mondayOf(todayISO())))
     mondayBanner=`<div class="banner" style="background:#EEF;border:1px solid #CCD;color:var(--primary);margin-bottom:12px;cursor:pointer" onclick="tab='peso';render()">⚖️ <span>Es lunes: toca pesarse. Toca para registrar tu peso.</span></div>`;
+  let backupBanner="";
+  if(needsBackup()) backupBanner=`<div class="banner" style="background:#FFF7ED;border:1px solid #FCD9B6;color:var(--amber);margin-bottom:12px;cursor:pointer" onclick="exportJSON()">💾 <span>Hace tiempo que no haces copia de seguridad. Toca para exportar una copia y no perder tus datos.</span></div>`;
   const meals = MEALS.map(([k,label])=>{
     const items=d[k].map((it,i)=>`<div class="item">
         <div style="min-width:0;padding-right:8px;flex:1"><div style="overflow-wrap:anywhere">${esc(it.name)}</div>
@@ -423,12 +430,15 @@ function renderDiario(m){
       <button class="btn icon" onclick="curISO=shift(curISO,-1);render()">‹</button>
       <span class="sm bold" style="text-transform:capitalize">${humanDate(curISO)}</span>
       <button class="btn icon" onclick="if(curISO<todayISO()){curISO=shift(curISO,1);render()}" ${curISO>=todayISO()?"disabled":""}>›</button></div>
-    ${mondayBanner}
+    ${mondayBanner}${backupBanner}
     ${ring(consumed, m.target, burned, DB.settings.addExercise)}
     ${m.target<m.bmr?`<div class="banner" style="background:var(--overbg);border:1px solid #F6D6C6;color:var(--over);margin-top:12px">⚠️ <span>Tu objetivo (${es(m.target)}) está por debajo de tu metabolismo basal (${es(m.bmr)} kcal). No es recomendable sostenerlo.</span></div>`:""}
     ${meals}${exCard}
     <p class="xs muted" style="margin-top:16px;line-height:1.5">Calorías (comida y ejercicio) orientativas, no medidas de laboratorio. Herramienta de registro, no consejo médico.</p>`;
 }
+function needsBackup(){ if(cloudReady()&&fbUser) return false; const days=DB.days||{};
+  const has=(DB.weights&&DB.weights.length)||Object.keys(days).some(k=>{const d=days[k]||{}; return MEALS.some(([mk])=>((d[mk]||[]).length))||((d.ejercicio||[]).length);});
+  if(!has) return false; const lb=DB.settings.lastBackup; if(!lb) return true; return (Date.now()-new Date(lb+"T00:00:00").getTime())/86400000 >= 7; }
 function delFood(k,i){ dayOf(curISO)[k].splice(i,1); save(); render(); }
 function delEx(i){ dayOf(curISO).ejercicio.splice(i,1); save(); render(); }
 
@@ -737,6 +747,7 @@ function renderAjustes(m){ const s=DB.settings, hasAI=!!DB.apiKey;
         <span class="xs" style="color:${hasAI?'var(--under)':'var(--sub)'}">${hasAI?'IA activada':'IA desactivada'}</span></div>
       <a class="xs" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Conseguir una clave →</a>
     </div>
+    ${cloudCardHTML()}
     <div class="card" style="padding:16px;margin-top:12px">
       <div class="bold" style="margin-bottom:8px">Copia de seguridad</div>
       <div class="row wrap"><button class="btn" onclick="exportJSON()">Exportar datos</button>
@@ -803,7 +814,7 @@ function repoDel(i){ DB.foods.splice(i,1); save(); renderRepo(); }
 
 /* ===================== datos ===================== */
 function exportJSON(){ const blob=new Blob([JSON.stringify(DB,null,2)],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="calorias-backup.json"; a.click(); }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="calorias-backup.json"; a.click(); DB.settings.lastBackup=todayISO(); save(); toast("Copia exportada"); render(); }
 function importJSON(file){ if(!file) return; const r=new FileReader();
   r.onload=()=>{ try{ DB=normalize(JSON.parse(r.result)); save(); toast("Datos importados"); render(); }catch(e){ toast("Archivo no válido"); } }; r.readAsText(file); }
 function exportCSV(){ const d=dayOf(curISO); let rows=[["seccion","concepto","cantidad/detalle","kcal"]];
@@ -812,6 +823,46 @@ function exportCSV(){ const d=dayOf(curISO); let rows=[["seccion","concepto","ca
   const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(";")).join("\n");
   const blob=new Blob(["\ufeff"+csv],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`calorias-${curISO}.csv`; a.click(); }
 function resetAll(){ if(confirm("¿Borrar TODOS los datos (incluidos tus datos personales)?")){ localStorage.removeItem(LS); DB=load(); tab="diario"; curISO=todayISO(); toast("Datos borrados"); render(); } }
+
+/* ===================== nube (Firebase, opcional) ===================== */
+const FIREBASE_CONFIG = {
+  apiKey: "PEGA_AQUI_TU_API_KEY",
+  authDomain: "TU-PROYECTO.firebaseapp.com",
+  projectId: "TU-PROYECTO",
+  storageBucket: "TU-PROYECTO.appspot.com",
+  messagingSenderId: "PEGA_AQUI",
+  appId: "PEGA_AQUI"
+};
+const CLOUD_ON = (typeof firebase!=="undefined") && FIREBASE_CONFIG.apiKey.indexOf("PEGA_AQUI")!==0;
+let fbAuth=null, fbDb=null, fbUser=null, _pushT=null, cloudMsg="";
+function cloudReady(){ return CLOUD_ON && !!fbAuth; }
+function cloudInit(){ if(!CLOUD_ON) return;
+  try{ firebase.initializeApp(FIREBASE_CONFIG); fbAuth=firebase.auth(); fbDb=firebase.firestore();
+    fbAuth.onAuthStateChanged(async u=>{ fbUser=u||null; if(u){ await cloudPull(); } render(); });
+  }catch(e){ cloudMsg="No se pudo iniciar la nube."; } }
+function fbErr(e){ const c=(e&&e.code)||"";
+  if(c.indexOf("wrong-password")>=0||c.indexOf("invalid-credential")>=0||c.indexOf("user-not-found")>=0) return "Email o contraseña incorrectos.";
+  if(c.indexOf("email-already-in-use")>=0) return "Ese email ya tiene cuenta: usa Entrar.";
+  if(c.indexOf("weak-password")>=0) return "Contraseña muy corta (mínimo 6).";
+  if(c.indexOf("invalid-email")>=0) return "Email no válido.";
+  if(c.indexOf("network")>=0) return "Sin conexión."; return "No se pudo: "+((e&&e.message)||c); }
+async function cloudSignUp(){ const em=(document.getElementById("cl_em")||{}).value||"", pw=(document.getElementById("cl_pw")||{}).value||"";
+  cloudMsg=""; try{ await fbAuth.createUserWithEmailAndPassword(em.trim(),pw); toast("Cuenta creada"); }catch(e){ cloudMsg=fbErr(e); render(); } }
+async function cloudSignIn(){ const em=(document.getElementById("cl_em")||{}).value||"", pw=(document.getElementById("cl_pw")||{}).value||"";
+  cloudMsg=""; try{ await fbAuth.signInWithEmailAndPassword(em.trim(),pw); toast("Sesión iniciada"); }catch(e){ cloudMsg=fbErr(e); render(); } }
+async function cloudSignOut(){ try{ await fbAuth.signOut(); toast("Sesión cerrada"); }catch(e){} }
+async function cloudPull(){ if(!cloudReady()||!fbUser) return;
+  try{ const snap=await fbDb.collection("users").doc(fbUser.uid).get();
+    if(snap.exists){ const c=snap.data()||{}; if((c.updatedAt||0) > (DB.updatedAt||0)){ const key=DB.apiKey; DB=normalize(JSON.parse(JSON.stringify(c))); DB.apiKey=key; saveLocal(); } else { cloudPush(true); } }
+    else { cloudPush(true); } }catch(e){ cloudMsg="No pude leer la nube."; } }
+function cloudPush(now){ if(!cloudReady()||!fbUser) return; clearTimeout(_pushT);
+  const doIt=()=>{ try{ const c=JSON.parse(JSON.stringify(DB)); delete c.apiKey; c.updatedAt=DB.updatedAt||Date.now(); fbDb.collection("users").doc(fbUser.uid).set(c); }catch(e){} };
+  if(now) doIt(); else _pushT=setTimeout(doIt,1500); }
+function cloudCardHTML(){
+  if(!CLOUD_ON) return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Sincronización en la nube ☁️</div><div class="xs muted">Para activarla, pega la configuración de tu proyecto de Firebase en el archivo (variable FIREBASE_CONFIG, arriba del todo) y vuelve a subirlo.</div></div>`;
+  if(fbUser) return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Nube ☁️</div><div class="sm">Sesión: <b>${esc(fbUser.email||"")}</b></div><div class="xs" style="color:var(--under);margin:4px 0 10px">Tus datos se guardan en la nube automáticamente.</div><div class="row wrap"><button class="btn" onclick="cloudPush(true);toast('Sincronizado')">Sincronizar ahora</button><button class="btn" onclick="cloudSignOut()">Cerrar sesión</button></div></div>`;
+  return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Nube ☁️</div><p class="xs muted" style="margin:0 0 10px">Entra con tu email para guardar tus datos en la nube y recuperarlos si borras el navegador o cambias de móvil.</p><input id="cl_em" type="email" placeholder="Email" autocomplete="username"/><input id="cl_pw" type="password" placeholder="Contraseña (mín. 6)" autocomplete="current-password" style="margin-top:8px"/><div class="row" style="margin-top:10px"><button class="btn primary" onclick="cloudSignIn()">Entrar</button><button class="btn" onclick="cloudSignUp()">Crear cuenta</button></div>${cloudMsg?`<div class="xs" style="color:var(--over);margin-top:8px">${esc(cloudMsg)}</div>`:""}</div>`;
+}
 
 /* ===================== PWA ===================== */
 (function installPWA(){ try{
@@ -827,6 +878,7 @@ function resetAll(){ if(confirm("¿Borrar TODOS los datos (incluidos tus datos p
 
 /* ===================== arranque ===================== */
 DB = load();
+cloudInit();
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{ tab=b.dataset.tab; render(); });
 document.getElementById("btnRepo").onclick=openRepo;
 render();
