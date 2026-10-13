@@ -125,6 +125,22 @@ function bmr(s){ const b=10*s.weight+6.25*s.height-5*ageOf(s); return Math.round
 function metrics(s){ const B=bmr(s), T=Math.round(B*s.activity),
   D=Math.round(s.monthlyGoalKg*KCAL_PER_KG/DPM), auto=T-D;
   return {bmr:B, tdee:T, deficit:D, autoTarget:auto, target: s.targetMode==="manual"?Math.round(s.manualTarget):auto}; }
+function realMaintenance(){
+  const W=[...(DB.weights||[])].sort((a,b)=>a.week.localeCompare(b.week));
+  if(W.length<2) return null;
+  const last=W[W.length-1]; const cutoff=shift(last.week,-56);
+  const win=W.filter(w=>w.week>=cutoff); if(win.length<2) return null;
+  const a=win[0], b=win[win.length-1];
+  const days=(new Date(b.week+"T00:00:00")-new Date(a.week+"T00:00:00"))/86400000;
+  if(days<10) return null;
+  let sum=0,n=0;
+  Object.keys(DB.days||{}).forEach(iso=>{ if(iso>=a.week && iso<=b.week){ const d=DB.days[iso]||{}; let c=0,has=false;
+    MEALS.forEach(([k])=>{(d[k]||[]).forEach(it=>{c+=(+it.kcal||0);has=true;});}); if(has){ sum+=c; n++; } } });
+  if(n<7) return null;
+  const avg=sum/n, lossKg=a.kg-b.kg;
+  return { maint:Math.round(avg+lossKg*KCAL_PER_KG/days), avg:Math.round(avg), days:Math.round(days), nDays:n, lossKg:+lossKg.toFixed(2), rateMonth:+(lossKg/days*30.44).toFixed(2) };
+}
+function useAdaptive(v){ DB.settings.targetMode="manual"; DB.settings.manualTarget=v; save(); toast("Objetivo actualizado a "+es(v)+" kcal"); render(); }
 function kcalAct(met,min,w){ return Math.round(met*w*min/60); }
 function kcalSteps(steps,w){ return Math.round(steps*w*0.0005); }
 
@@ -742,6 +758,7 @@ function renderAjustes(m){ const s=DB.settings, hasAI=!!DB.apiKey;
       <label class="row" style="gap:8px;margin-top:12px;width:auto;font-size:14px"><input type="checkbox" style="width:auto" ${s.addExercise?'checked':''} onchange="DB.settings.addExercise=this.checked;save();render()"/> Sumar el ejercicio al objetivo del día</label>
       <div class="xs muted" style="margin-top:4px">Si lo activas, elige un nivel de actividad bajo para no contar el ejercicio dos veces.</div>
     </div>
+    ${adaptiveCardHTML()}
     <div class="card" style="padding:16px;margin-top:12px">
       <div class="bold" style="margin-bottom:8px">Estimación por IA (opcional)</div>
       <p class="xs muted" style="margin:0 0 10px;line-height:1.5">Pega tu clave de API de Anthropic para activar “Describir” y el escaneo de etiquetas. Se guarda <b>solo en este dispositivo</b>. Coste con Haiku 4.5: menos de un céntimo por estimación. Requiere abrir la app desde una URL https.</p>
@@ -760,6 +777,22 @@ function renderAjustes(m){ const s=DB.settings, hasAI=!!DB.apiKey;
         <button class="btn" onclick="exportCSV()">CSV del día</button></div>
       <button class="btn" style="margin-top:10px;color:var(--over);border-color:#F6D6C6" onclick="resetAll()">Borrar todo</button>
     </div>`;
+}
+function adaptiveCardHTML(){
+  const r=realMaintenance();
+  if(!r) return `<div class="card" style="padding:16px;margin-top:12px"><div class="bold" style="margin-bottom:6px">Objetivo adaptativo \u2696\ufe0f</div><div class="xs muted">Necesito al menos 2 pesajes separados ~2 semanas y 7+ días de comidas registradas para calcular tu mantenimiento real con la báscula. Sigue pesándote cada semana y aparecerá aquí.</div></div>`;
+  const s=DB.settings; const teor=metrics(s).tdee;
+  const sug=Math.max(1300, Math.round((r.maint - s.monthlyGoalKg*KCAL_PER_KG/DPM)/10)*10);
+  return `<div class="card" style="padding:16px;margin-top:12px">
+    <div class="bold" style="margin-bottom:6px">Objetivo adaptativo \u2696\ufe0f</div>
+    <div class="xs muted" style="margin-bottom:8px">Calculado con tu báscula: ${r.nDays} días de comidas y ${r.days} días entre pesajes. Se recalibra solo cada semana que te peses.</div>
+    ${rowKV("Mantenimiento real (báscula)","<b>"+es(r.maint)+" kcal</b>")}
+    ${rowKV("Mantenimiento teórico (fórmula)",es(teor)+" kcal")}
+    ${rowKV("Ritmo medido",es(r.rateMonth)+" kg/mes")}
+    <div style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px">${rowKV("Objetivo sugerido para "+es(s.monthlyGoalKg)+" kg/mes","<b>"+es(sug)+" kcal</b>")}</div>
+    <button class="btn green" style="width:100%;margin-top:10px" onclick="useAdaptive(${sug})">Usar este objetivo (${es(sug)} kcal)</button>
+    <div class="xs muted" style="margin-top:6px">Lo fija como objetivo manual; puedes cambiarlo cuando quieras. Nunca baja de 1.300 kcal por seguridad.</div>
+  </div>`;
 }
 function calcBox(m){ return `<div style="font-size:14px">${rowKV("Metabolismo basal (BMR)",es(m.bmr)+" kcal")}${rowKV("Gasto total (TDEE)",es(m.tdee)+" kcal")}${rowKV("Déficit diario","− "+es(m.deficit)+" kcal")}
   <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:6px">${rowKV("Objetivo automático","<b>"+es(m.autoTarget)+" kcal</b>")}</div></div>`; }
